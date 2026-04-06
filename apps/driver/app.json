@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "SafeRoute Driver",
+    "slug": "saferoute-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.saferoute.driver",
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SafeRoute needs your location to track the bus in real-time.",
+        "NSLocationWhenInUseUsageDescription": "SafeRoute needs your location to track the bus in real-time.",
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.saferoute.driver",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SafeRoute needs your location to track the bus in real-time.",
+          "locationWhenInUsePermission": "SafeRoute needs your location to track the bus in real-time."
+        }
+      ]
+    ],
+    "newArchEnabled": true,
+    "scheme": "saferoute-driver",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}

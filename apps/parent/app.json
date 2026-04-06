@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "SafeRoute Parent",
+    "slug": "saferoute-parent",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.saferoute.parent"
+    },
+    "android": {
+      "package": "com.saferoute.parent"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "newArchEnabled": true,
+    "scheme": "saferoute-parent",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}

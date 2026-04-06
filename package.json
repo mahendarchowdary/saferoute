@@ -1,0 +1,31 @@
+{
+  "name": "saferoute-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:gps\" \"npm run dev:admin\"",
+    "dev:api": "cd apps/api && npm run dev",
+    "dev:gps": "cd apps/gps-service && go run main.go",
+    "dev:admin": "cd apps/admin && npm run dev",
+    "dev:driver": "cd apps/driver && npx expo start",
+    "dev:parent": "cd apps/parent && npx expo start",
+    "start": "start.bat",
+    "stop": "stop.bat",
+    "health": "health.bat",
+    "test": "node test-gps.js",
+    "db:migrate": "cd packages/db && npx prisma migrate dev",
+    "db:push": "cd packages/db && npx prisma db push",
+    "db:generate": "cd packages/db && npx prisma generate",
+    "db:studio": "cd packages/db && npx prisma studio"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

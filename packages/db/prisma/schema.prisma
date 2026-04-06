@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model School {
+  id          String   @id @default(cuid())
+  name        String
+  address     String
+  latitude    Float
+  longitude   Float
+  phone       String?
+  email       String?
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  buses       Bus[]
+  routes      Route[]
+  students    Student[]
+  trips       Trip[]
+  alerts      Alert[]
+
+  @@map("schools")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String?   @unique
+  phone       String    @unique
+  password    String
+  name        String
+  role        UserRole  @default(DRIVER)
+  schoolId    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+  resetToken  String?   @unique
+  resetTokenExpires DateTime?
+
+  school      School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  driverTrips Trip[]    @relation("DriverTrips")
+  parentStudents Student[] @relation("ParentStudents")
+  fcmTokens   FcmToken[]
+
+  @@map("users")
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  name        String
+  rollNumber  String?
+  grade       String?
+  schoolId    String
+  parentId    String
+  routeId     String?
+  stopId      String?
+  photoUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  parent      User     @relation("ParentStudents", fields: [parentId], references: [id], onDelete: Cascade)
+  route       Route?   @relation(fields: [routeId], references: [id])
+  stop        Stop?    @relation(fields: [stopId], references: [id])
+  attendance  Attendance[]
+
+  @@map("students")
+}
+
+model Bus {
+  id          String    @id @default(cuid())
+  plateNumber String    @unique
+  model       String?
+  capacity    Int       @default(30)
+  schoolId    String
+  status      BusStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  trips       Trip[]
+
+  @@map("buses")
+}
+
+model Route {
+  id          String   @id @default(cuid())
+  name        String
+  schoolId    String
+  distanceKm  Float?
+  estimatedMin Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  stops       Stop[]
+  students    Student[]
+  trips       Trip[]
+
+  @@map("routes")
+}
+
+model Stop {
+  id          String   @id @default(cuid())
+  name        String
+  latitude    Float
+  longitude   Float
+  routeId     String
+  sequence    Int
+  arrivalMin  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  route       Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  students    Student[]
+
+  @@map("stops")
+}
+
+model Trip {
+  id          String     @id @default(cuid())
+  driverId    String
+  busId       String
+  routeId     String
+  schoolId    String
+  shift       ShiftType
+  status      TripStatus @default(SCHEDULED)
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  driver      User       @relation("DriverTrips", fields: [driverId], references: [id])
+  bus         Bus        @relation(fields: [busId], references: [id])
+  route       Route      @relation(fields: [routeId], references: [id])
+  school      School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gpsPings    GpsPing[]
+  attendance  Attendance[]
+  alerts      Alert[]
+
+  @@map("trips")
+}
+
+model GpsPing {
+  id          String   @id @default(cuid())
+  tripId      String
+  schoolId    String?
+  latitude    Float
+  longitude   Float
+  speed       Float?
+  heading     Float?
+  accuracy    Float?
+  battery     Int?
+  timestamp   DateTime @default(now())
+
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, timestamp])
+  @@index([schoolId, timestamp])
+  @@map("gps_pings")
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  tripId      String
+  studentId   String
+  status      AttendanceStatus
+  onboardedAt DateTime?
+  droppedAt   DateTime?
+  createdAt   DateTime         @default(now())
+
+  trip        Trip             @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, studentId])
+  @@map("attendance")
+}
+
+model Alert {
+  id          String      @id @default(cuid())
+  schoolId    String
+  tripId      String?
+  type        AlertType
+  severity    AlertSeverity @default(MEDIUM)
+  message     String
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  trip        Trip?       @relation(fields: [tripId], references: [id])
+
+  @@map("alerts")
+}
+
+model FcmToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  device    String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("fcm_tokens")
+}
+
+model FileUpload {
+  id           String      @id @default(cuid())
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  schoolId     String?
+  uploadedBy   String
+  type         UploadType  @default(GENERAL)
+  entityId     String?     // ID of related entity (student, driver, etc)
+  createdAt    DateTime    @default(now())
+
+  @@map("file_uploads")
+}
+
+enum UserRole {
+  ADMIN
+  DRIVER
+  PARENT
+}
+
+enum BusStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+
+enum ShiftType {
+  MORNING
+  AFTERNOON
+}
+
+enum TripStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PENDING
+  ONBOARD
+  DROPPED
+  ABSENT
+}
+
+enum AlertType {
+  SOS
+  SPEEDING
+  OFF_ROUTE
+  STOP_ARRIVED
+  STOP_DEPARTED
+  EMERGENCY
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum UploadType {
+  GENERAL
+  STUDENT_PHOTO
+  DRIVER_PHOTO
+  SCHOOL_LOGO
+  DOCUMENT
+}
