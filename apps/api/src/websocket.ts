@@ -1,6 +1,14 @@
 import { Server, Socket } from 'socket.io';
 import { prisma } from './lib/prisma';
 import { verifyAccessToken } from './middleware/auth';
+import { 
+  haversineDistance, 
+  TripGeofenceManager, 
+  getTripGeofence, 
+  removeTripGeofence,
+  type GeofenceEvent,
+  type GPSPoint 
+} from './lib/geofence';
 
 interface LocationPayload {
   tripId: string;
@@ -13,24 +21,8 @@ interface LocationPayload {
   timestamp: number;
 }
 
-// Calculate distance between two coordinates (Haversine formula)
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371e3; // Earth radius in meters
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lng2 - lng1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-  return R * c; // Distance in meters
-}
-
-// Store notified stops to prevent duplicate alerts (stopId:timestamp)
-const notifiedStops = new Map<string, number>();
+// Trip geofence managers
+const tripGeofences = new Map<string, TripGeofenceManager>();
 
 export const setupWebSocketHandlers = (io: Server) => {
   // Authentication middleware for Socket.IO
@@ -145,92 +137,112 @@ export const setupWebSocketHandlers = (io: Server) => {
           const ROUTE_DEVIATION_THRESHOLD = 200; // meters off route
           const now = Date.now();
           
-          // Check for off-route deviation
-          let minDistanceToRoute = Infinity;
-          for (const stop of trip.route.stops) {
-            const dist = calculateDistance(payload.lat, payload.lng, stop.latitude, stop.longitude);
-            if (dist < minDistanceToRoute) {
-              minDistanceToRoute = dist;
-            }
-          }
-          
-          // Alert if off-route
-          if (minDistanceToRoute > ROUTE_DEVIATION_THRESHOLD) {
-            const deviationKey = `${payload.tripId}:deviation`;
-            const lastDeviationAlert = notifiedStops.get(deviationKey);
-            
-            // Alert once every 2 minutes
-            if (!lastDeviationAlert || (now - lastDeviationAlert) > 2 * 60 * 1000) {
-              notifiedStops.set(deviationKey, now);
-              
-              const alert = {
-                type: 'ROUTE_DEVIATION',
-                message: `Bus is off route (${Math.round(minDistanceToRoute)}m from nearest stop)`,
+        // Initialize trip geofence manager if not exists
+        if (!tripGeofences.has(payload.tripId)) {
+          const geofence = new TripGeofenceManager(payload.tripId);
+          await geofence.initialize();
+          tripGeofences.set(payload.tripId, geofence);
+        }
+
+        const geofence = tripGeofences.get(payload.tripId)!;
+        const location: GPSPoint = {
+          lat: payload.lat,
+          lng: payload.lng,
+          timestamp: new Date(),
+        };
+
+        // Process geofence events
+        const events = geofence.processLocation(location);
+        
+        // Handle geofence events
+        for (const event of events) {
+          switch (event.type) {
+            case 'STOP_ARRIVED':
+              // Emit to trip room
+              io.to(`trip:${payload.tripId}`).emit('stop:arrived', {
                 tripId: payload.tripId,
-                distance: Math.round(minDistanceToRoute),
-                timestamp: new Date().toISOString()
-              };
+                stopId: event.stopId,
+                stopName: event.stopName,
+                distance: event.distance,
+                timestamp: event.timestamp.toISOString(),
+              });
               
-              io.emit('alert:deviation', alert);
-              console.log('Route deviation alert:', Math.round(minDistanceToRoute), 'm off route');
-            }
-          }
-          
-          for (const stop of trip.route.stops) {
-            const distance = calculateDistance(
-              payload.lat, payload.lng,
-              stop.latitude, stop.longitude
-            );
-            
-            if (distance <= GEOFENCE_RADIUS) {
-              const stopKey = `${payload.tripId}:${stop.id}`;
-              const lastNotified = notifiedStops.get(stopKey);
+              // Notify parents at this stop
+              const parents = await prisma.student.findMany({
+                where: { stopId: event.stopId },
+                select: { parentId: true },
+              });
               
-              // Only notify once every 5 minutes per stop
-              if (!lastNotified || (now - lastNotified) > 5 * 60 * 1000) {
-                notifiedStops.set(stopKey, now);
-                
-                const alert = {
-                  type: 'GEOFENCE',
-                  message: `Bus is approaching ${stop.name}`,
-                  tripId: payload.tripId,
-                  stopId: stop.id,
-                  stopName: stop.name,
-                  distance: Math.round(distance),
-                  timestamp: new Date().toISOString()
-                };
-                
-                // Notify all parents (in real app, filter by parents at this stop)
-                io.emit('alert:geofence', alert);
-                console.log('Geofence alert sent for stop:', stop.name, 'distance:', Math.round(distance), 'm');
-              }
-            }
+              parents.forEach((p: any) => {
+                io.to(`user:${p.parentId}`).emit('stop:arrived', {
+                  stopId: event.stopId,
+                  stopName: event.stopName,
+                  timestamp: event.timestamp.toISOString(),
+                });
+              });
+              
+              console.log(`✅ Stop arrived: ${event.stopName} (${event.distance}m)`);
+              break;
+
+            case 'STOP_APPROACHING':
+              // Pre-alert: notify parents bus is approaching
+              io.to(`trip:${payload.tripId}`).emit('stop:approaching', {
+                tripId: payload.tripId,
+                stopId: event.stopId,
+                stopName: event.stopName,
+                distance: event.distance,
+                eta: event.eta,
+                timestamp: event.timestamp.toISOString(),
+              });
+              console.log(`⏰ Approaching: ${event.stopName} (${event.distance}m, ETA ${event.eta}min)`);
+              break;
+
+            case 'ROUTE_DEVIATION':
+              io.emit('alert:deviation', {
+                type: 'ROUTE_DEVIATION',
+                message: `Bus is off route (${event.distance}m from nearest stop)`,
+                tripId: payload.tripId,
+                distance: event.distance,
+                timestamp: event.timestamp.toISOString(),
+              });
+              console.log(`⚠️ Route deviation: ${event.distance}m off route`);
+              break;
+
+            case 'ROUTE_DEVIATION_CLEARED':
+              io.emit('alert:deviation_cleared', {
+                type: 'ROUTE_DEVIATION_CLEARED',
+                tripId: payload.tripId,
+                timestamp: event.timestamp.toISOString(),
+              });
+              console.log('✅ Route deviation cleared');
+              break;
           }
-        } else if (!trip) {
-          // MOCK GEOFENCE for simulator testing - use hardcoded stops
+        }
+
+        // Legacy geofence for mock testing (when no trip in DB)
+        if (!trip) {
           const mockStops = [
             { id: 'stop-1', name: 'Maple Street', lat: 17.4080, lng: 78.4785 },
             { id: 'stop-2', name: 'Oak Avenue', lat: 17.4140, lng: 78.4840 },
             { id: 'stop-3', name: 'School', lat: 17.4065, lng: 78.4772 }
           ];
           
-          const GEOFENCE_RADIUS = 200; // meters
+          const GEOFENCE_RADIUS = 200;
           const now = Date.now();
           
           for (const stop of mockStops) {
-            const distance = calculateDistance(
-              payload.lat, payload.lng,
-              stop.lat, stop.lng
+            const distance = haversineDistance(
+              { lat: payload.lat, lng: payload.lng },
+              { lat: stop.lat, lng: stop.lng }
             );
             
             if (distance <= GEOFENCE_RADIUS) {
               const stopKey = `${payload.tripId}:${stop.id}`;
-              const lastNotified = notifiedStops.get(stopKey);
+              const lastNotified = tripGeofences.get(payload.tripId);
               
               // Only notify once every 2 minutes per stop (for testing)
-              if (!lastNotified || (now - lastNotified) > 2 * 60 * 1000) {
-                notifiedStops.set(stopKey, now);
-                
+              // Using simple Map for tracking mock notifications
+              if (!lastNotified || (Date.now() - now) > 2 * 60 * 1000) {
                 const alert = {
                   type: 'GEOFENCE',
                   message: `Bus is approaching ${stop.name} (SIMULATED)`,
