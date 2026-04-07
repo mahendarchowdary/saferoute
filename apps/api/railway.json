@@ -6,7 +6,7 @@
       "providers": ["node"],
       "phases": {
         "build": {
-          "cmds": ["cd apps/api && npm install && npx tsc"]
+          "cmds": ["cd apps/api && npm install && npx prisma generate && npx tsc"]
         }
       }
     }
