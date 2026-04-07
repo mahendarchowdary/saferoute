@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ interface Route {
   stops: Stop[];
 }
 
-export default function RoutePreviewPage() {
+function RoutePreviewContent() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const routeId = searchParams.get('id');
@@ -211,5 +211,13 @@ export default function RoutePreviewPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function RoutePreviewPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+      <RoutePreviewContent />
+    </Suspense>
   );
 }
