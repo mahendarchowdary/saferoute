@@ -210,6 +210,22 @@ model FcmToken {
   @@map("fcm_tokens")
 }
 
+model NotificationLog {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  body        String
+  data        Json     @default("{}")
+  delivered   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_logs")
+  @@index([userId, createdAt])
+}
+
 model FileUpload {
   id           String      @id @default(cuid())
   filename     String
