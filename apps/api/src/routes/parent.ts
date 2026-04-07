@@ -41,6 +41,10 @@ router.get('/student-trip/:studentId', requireRole('PARENT'), async (req: any, r
     }
 
     // Find active trip for this student's route
+    if (!student.routeId) {
+      return res.status(404).json({ error: 'Student not assigned to any route' });
+    }
+    
     const activeTrip = await prisma.trip.findFirst({
       where: {
         routeId: student.routeId,
@@ -57,7 +61,7 @@ router.get('/student-trip/:studentId', requireRole('PARENT'), async (req: any, r
         attendance: {
           where: { studentId: req.params.studentId },
           include: {
-            student: { select: { id: true, name: true, status: true } }
+            student: { select: { id: true, name: true } }
           }
         },
         gpsPings: {

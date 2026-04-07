@@ -355,10 +355,7 @@ router.post('/:id/attendance/:studentId', requireRole('DRIVER'), async (req: any
         tripId: req.params.id,
         studentId: req.params.studentId
       },
-      data: {
-        status,
-        markedAt: new Date()
-      }
+      data: status === 'ONBOARD' ? { status, onboardedAt: new Date() } : { status, droppedAt: new Date() }
     });
 
     if (attendance.count === 0) {
