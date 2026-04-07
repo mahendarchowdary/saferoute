@@ -68,7 +68,7 @@ app.use('/api/uploads', uploadRouter);
 setupWebSocketHandlers(io);
 
 // Error handling (Sentry first, then custom)
-app.use(Sentry.Handlers.errorHandler());
+// Note: Sentry v10 doesn't have Handlers.errorHandler(), using custom handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;

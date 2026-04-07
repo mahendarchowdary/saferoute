@@ -291,7 +291,7 @@ export const setupWebSocketHandlers = (io: Server) => {
           select: { parentId: true }
         });
 
-        parents.forEach(p => {
+        parents.forEach((p: any) => {
           io.to(`user:${p.parentId}`).emit('stop:arrived', {
             stopId: data.stopId,
             stopName: stop.name,

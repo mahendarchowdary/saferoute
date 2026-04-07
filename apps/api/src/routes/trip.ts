@@ -174,7 +174,7 @@ router.post('/start', requireRole('DRIVER'), async (req: any, res, next) => {
     });
 
     await prisma.attendance.createMany({
-      data: students.map(student => ({
+      data: students.map((student: any) => ({
         tripId: trip.id,
         studentId: student.id,
         status: 'PENDING'

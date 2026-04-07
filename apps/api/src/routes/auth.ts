@@ -31,7 +31,7 @@ router.post('/register-school', async (req, res, next) => {
     const data = registerSchema.parse(req.body);
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const school = await tx.school.create({
         data: {
           name: data.schoolName,

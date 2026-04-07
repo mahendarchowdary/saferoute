@@ -44,7 +44,7 @@ router.post('/', requireRole('ADMIN'), async (req: Request & { user?: any }, res
 
     const data = schema.parse(req.body);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Find parent by phone (phone is unique, email is optional)
       let parent = await tx.user.findUnique({
         where: { phone: data.parentPhone }
@@ -125,7 +125,7 @@ router.post('/bulk-import', requireRole('ADMIN'), async (req: Request & { user?:
 
     for (const data of students) {
       try {
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx: any) => {
           let parent = await tx.user.findUnique({
             where: { email: data.parentEmail }
           });
